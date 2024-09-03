@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>三角函數練習</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            padding: 20px;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            margin-top: 20px;
+        }
+        .options {
+            display: flex;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        .option {
+            padding: 10px 20px;
+            margin: 0 10px;
+            background-color: lightblue;
+            border: 1px solid #ccc;
+            cursor: pointer;
+        }
+        .result {
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>三角函數特殊角練習</h1>
+    <p id="question">按下按鈕開始練習！</p>
+    <button onclick="generateQuestion()">產生題目</button>
+
+    <div class="options" id="options"></div>
+
+    <div class="result" id="result"></div>
+
+    <script>
+        const angles = [0, 30, 45, 60, 90];
+        const functions = ['sin', 'cos', 'tan'];
+        let correctAnswer;
+        let startTime;
+
+        function generateQuestion() {
+            const angle = angles[Math.floor(Math.random() * angles.length)];
+            const func = functions[Math.floor(Math.random() * functions.length)];
+            const question = `${func}(${angle}°)`;
+            document.getElementById('question').innerText = question;
+
+            correctAnswer = calculateAnswer(func, angle);
+            const options = generateOptions(correctAnswer);
+            displayOptions(options);
+
+            document.getElementById('result').innerText = '';
+            startTime = new Date();
+        }
+
+        function calculateAnswer(func, angle) {
+            const values = {
+                'sin': {
+                    0: '0',
+                    30: '1 / 2',
+                    45: '√2 / 2',
+                    60: '√3 / 2',
+                    90: '1'
+                },
+                'cos': {
+                    0: '1',
+                    30: '√3 / 2',
+                    45: '√2 / 2',
+                    60: '1 / 2',
+                    90: '0'
+                },
+                'tan': {
+                    0: '0',
+                    30: '√3 / 3',
+                    45: '1',
+                    60: '√3',
+                    90: '∞'
+                }
+            };
+            return values[func][angle];
+        }
+
+        function generateOptions(correctAnswer) {
+            const allValues = [
+                '0', '1 / 2', '√2 / 2', '√3 / 2', '1',
+                '√3 / 3', '√3', '∞'
+            ];
+
+            // 過濾掉正確答案
+            const filteredValues = allValues.filter(value => value !== correctAnswer);
+
+            // 隨機取出三個數值
+            const randomOptions = [];
+            while (randomOptions.length < 3) {
+                const randomIndex = Math.floor(Math.random() * filteredValues.length);
+                const randomValue = filteredValues[randomIndex];
+                if (!randomOptions.includes(randomValue)) {
+                    randomOptions.push(randomValue);
+                }
+            }
+
+            // 加入正確答案，並隨機排序
+            randomOptions.push(correctAnswer);
+            return randomOptions.sort(() => Math.random() - 0.5);
+        }
+
+        function displayOptions(options) {
+            const optionsDiv = document.getElementById('options');
+            optionsDiv.innerHTML = '';
+            options.forEach(option => {
+                const optionDiv = document.createElement('div');
+                optionDiv.className = 'option';
+                optionDiv.innerText = option;
+                optionDiv.onclick = () => checkAnswer(option);
+                optionsDiv.appendChild(optionDiv);
+            });
+        }
+
+        function checkAnswer(selectedOption) {
+            const endTime = new Date();
+            const timeTaken = ((endTime - startTime) / 1000).toFixed(2);
+            const resultDiv = document.getElementById('result');
+
+            if (selectedOption == correctAnswer) {
+                resultDiv.innerHTML = `正確！答案是 ${correctAnswer}。<br> 花費時間: ${timeTaken} 秒`;
+            } else {
+                resultDiv.innerHTML = `錯誤。正確答案是 ${correctAnswer}。<br> 花費時間: ${timeTaken} 秒`;
+            }
+        }
+    </script>
+
+</body>
+</html>
