@@ -7,31 +7,34 @@
   <style>
     body { font-family: sans-serif; padding: 20px; }
     #card-container button { margin: 0 10px; padding: 10px 20px; }
-    #score-table { border-collapse: collapse; margin-top: 20px; }
+    #score-table { border-collapse: collapse; margin-top: 20px; width: max-content; }
     #score-table th, #score-table td { border: 1px solid #ccc; padding: 5px; text-align: center; }
     #score-container { overflow-x: auto; }
     #end-ui { margin-top: 20px; }
-    #encode-btn { padding: 8px 16px; margin-top: 10px; }
+    #encode-btn, #restart-btn { padding: 8px 16px; margin: 10px 5px 0 0; }
     #encoded { margin-top: 10px; word-break: break-all; }
   </style>
 </head>
 <body>
   <h1>個人牌組 - 競技場模式</h1>
+  說明：你會在每一輪抽牌中選擇一張丟棄，並且將另外兩張牌加入個人牌組（當前統計可查詢）
+  <!-- 遊戲進行區 -->
   <div id="hand-ui">
-    <h2>第 <span id="q-num">1</span> /30 抽 </h2>
+    <h2>第 <span id="q-num">1</span> 抽／30</h2>
     <div id="card-container"></div>
   </div>
+
+  <!-- 結果與統計 -->
   <div id="score-container">
     <h2>當前統計</h2>
-    <table id="score-table">
-      <thead><tr id="score-header"></tr></thead>
-      <tbody><tr id="score-body"></tr></tbody>
-    </table>
+    <table id="score-table"></table>
   </div>
 
+  <!-- 遊戲結束後顯示按鈕 -->
   <div id="end-ui" style="display:none;">
     <h2>選完卡片，你可以把這副牌組複製成字串</h2>
     <button id="encode-btn">複製到剪貼簿</button>
+    <button id="restart-btn">再來一次</button>
     <div id="encoded"></div>
   </div>
 
@@ -65,6 +68,15 @@
     card_25: "土5",
   };
 
+  // 卡片屬性和等級分組定義
+  const attributes = [
+    { name: '金', ids: ['card_1','card_2','card_3','card_4','card_5'] },
+    { name: '水', ids: ['card_6','card_7','card_8','card_9','card_10'] },
+    { name: '木', ids: ['card_11','card_12','card_13','card_14','card_15'] },
+    { name: '火', ids: ['card_16','card_17','card_18','card_19','card_20'] },
+    { name: '土', ids: ['card_21','card_22','card_23','card_24','card_25'] }
+  ];
+
   // 公牌
   const cardDefinitions = {
     card_1: 4, card_2: 4, card_3: 4, card_4: 3, card_5: 3,
@@ -74,116 +86,114 @@
     card_21: 4, card_22: 4, card_23: 4, card_24: 3, card_25: 3
   };
 
-  let deck = [];
-  let scoreboard = {};
-  let questionNum = 1;
+  let deck = [], scoreboard = {}, questionNum = 1;
 
-  // 洗牌：Fisher–Yates
-  function shuffle(array) {
-    for (let i = array.length - 1; i > 0; i--) {
+  function shuffle(arr) {
+    for (let i = arr.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
-      [array[i], array[j]] = [array[j], array[i]];
+      [arr[i], arr[j]] = [arr[j], arr[i]];
     }
   }
-
-  // 根據 cardDefinitions 建立並洗牌卡池
   function buildDeck(defs) {
     const arr = [];
-    for (const [cardId, count] of Object.entries(defs)) {
-      for (let i = 0; i < count; i++) {
-        arr.push(cardId);
-      }
-    }
+    Object.entries(defs).forEach(([id,cnt]) => { for (let i=0;i<cnt;i++) arr.push(id); });
     shuffle(arr);
     return arr;
   }
-
-  // 初始化 scoreboard
-  function initializeScoreboard(defs) {
+  function initScore(defs) {
     const sb = {};
-    for (const cardId of Object.keys(defs)) {
-      sb[cardId] = 0;
-    }
+    Object.keys(defs).forEach(id=>sb[id]=0);
     return sb;
   }
 
-  // 顯示當前手牌（3 張按鈕）
   function renderHand(hand) {
-    const container = document.getElementById('card-container');
-    container.innerHTML = '';
-    hand.forEach((cardId, idx) => {
-      const btn = document.createElement('button');
-      btn.textContent = cardNames[cardId];
-      btn.onclick = () => onDiscard(idx, hand);
-      container.appendChild(btn);
+    const c = document.getElementById('card-container');
+    c.innerHTML = '';
+    hand.forEach((id, idx) => {
+      const b = document.createElement('button');
+      b.textContent = cardNames[id];
+      b.onclick = () => onDiscard(idx, hand);
+      c.appendChild(b);
     });
   }
 
-  // 更新 score table UI
   function updateScoreUI() {
-    const header = document.getElementById('score-header');
-    const body = document.getElementById('score-body');
-    header.innerHTML = '';
-    body.innerHTML = '';
-    for (const cardId of Object.keys(scoreboard)) {
-      const th = document.createElement('th');
-      th.textContent = cardNames[cardId];
-      header.appendChild(th);
-      const td = document.createElement('td');
-      td.textContent = scoreboard[cardId];
-      body.appendChild(td);
+    const tbl = document.getElementById('score-table');
+    tbl.innerHTML = '';
+    const thead = tbl.createTHead();
+    const hr = thead.insertRow();
+    hr.insertCell().outerHTML='<th>屬性 / 等級</th>';
+    for(let lvl=1;lvl<=5;lvl++) hr.insertCell().outerHTML=`<th>${lvl}級</th>`;
+    hr.insertCell().outerHTML='<th>張數總和</th>';
+    hr.insertCell().outerHTML='<th>等級總和</th>';
+    const body=tbl.createTBody();
+    let grandTotalCnt=0, grandTotalLvl=0;
+    attributes.forEach(attr=>{
+      const row=body.insertRow();
+      row.insertCell().textContent=attr.name;
+      let sumCnt=0, sumLvl=0;
+      attr.ids.forEach((id,i)=>{
+        const cnt=scoreboard[id]; sumCnt+=cnt; sumLvl+=cnt*(i+1);
+        row.insertCell().textContent=cnt;
+      });
+      row.insertCell().textContent=sumCnt;
+      row.insertCell().textContent=sumLvl;
+      grandTotalCnt+=sumCnt;
+      grandTotalLvl+=sumLvl;
+    });
+    const br=body.insertRow();
+    br.insertCell().textContent='同級總和';
+    for(let lvl=1;lvl<=5;lvl++){
+      let lvlSum=0;
+      attributes.forEach(attr=>lvlSum+=scoreboard[attr.ids[lvl-1]]);
+      br.insertCell().textContent=lvlSum;
     }
+    br.insertCell().textContent=grandTotalCnt;
+    br.insertCell().textContent=grandTotalLvl;
   }
 
-  // 玩家捨棄一張，統計剩餘兩張
-  function onDiscard(discardIdx, hand) {
-    hand.forEach((cardId, idx) => {
-      if (idx !== discardIdx) {
-        scoreboard[cardId]++;
-      }
-    });
+  function onDiscard(d, hand) {
+    hand.forEach((id,i)=>{ if(i!==d) scoreboard[id]++; });
     updateScoreUI();
     questionNum++;
-    if (questionNum <= 30) {
-      document.getElementById('q-num').textContent = questionNum;
+    if(questionNum<=30){
+      document.getElementById('q-num').textContent=questionNum;
       nextQuestion();
     } else {
-      // 顯示結束 UI
-      document.getElementById('hand-ui').style.display = 'none';
-      document.getElementById('end-ui').style.display = 'block';
+      document.getElementById('hand-ui').style.display='none';
+      document.getElementById('end-ui').style.display='block';
     }
   }
 
-  // 進入下一題
-  function nextQuestion() {
-    const hand = deck.splice(0, 3);
-    renderHand(hand);
-  }
+  function nextQuestion(){ renderHand(deck.splice(0,3)); }
 
-  // 編碼結果生成
-  function generateCode() {
-    let code = '';
-    for (let i = 1; i <= 25; i++) {
-      const key = 'card_' + i;
-      code += scoreboard[key];
-    }
-    return code;
-  }
+  function genCode(){ return Array.from({length:25},(_,i)=>scoreboard['card_'+(i+1)]).join(''); }
 
-  // 綁定按鈕事件
-  document.addEventListener('DOMContentLoaded', () => {
-    deck = buildDeck(cardDefinitions);
-    scoreboard = initializeScoreboard(cardDefinitions);
+  function restartGame(){
+    deck=buildDeck(cardDefinitions);
+    scoreboard=initScore(cardDefinitions);
+    questionNum=1;
+    document.getElementById('q-num').textContent=questionNum;
+    document.getElementById('hand-ui').style.display='block';
+    document.getElementById('end-ui').style.display='none';
+    document.getElementById('encoded').textContent='';
     updateScoreUI();
     nextQuestion();
+  }
 
-    document.getElementById('encode-btn').addEventListener('click', () => {
-      const result = generateCode();
-      document.getElementById('encoded').textContent = result;
-      navigator.clipboard.writeText(result)
-        .then(() => { alert('編碼結果已複製到剪貼簿'); })
-        .catch(err => { console.error('複製失敗', err); });
-    });
+  document.addEventListener('DOMContentLoaded',()=>{
+    deck=buildDeck(cardDefinitions);
+    scoreboard=initScore(cardDefinitions);
+    updateScoreUI();
+    nextQuestion();
+    document.getElementById('encode-btn').onclick=()=>{
+      const code=genCode();
+      document.getElementById('encoded').textContent=code;
+      navigator.clipboard.writeText(code)
+        .then(()=>alert('編碼結果已複製到剪貼簿'))
+        .catch(err=>console.error('複製失敗',err));
+    };
+    document.getElementById('restart-btn').onclick=restartGame;
   });
   </script>
 </body>
