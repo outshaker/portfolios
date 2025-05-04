@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>個人牌組 - 競技場模式</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    #card-container button { margin: 0 10px; padding: 10px 20px; }
+    #score-table { border-collapse: collapse; margin-top: 20px; }
+    #score-table th, #score-table td { border: 1px solid #ccc; padding: 5px; text-align: center; }
+    #score-container { overflow-x: auto; }
+    #end-ui { margin-top: 20px; }
+    #encode-btn { padding: 8px 16px; margin-top: 10px; }
+    #encoded { margin-top: 10px; word-break: break-all; }
+  </style>
+</head>
+<body>
+  <h1>個人牌組 - 競技場模式</h1>
+  <div id="hand-ui">
+    <h2>第 <span id="q-num">1</span> /30 抽 </h2>
+    <div id="card-container"></div>
+  </div>
+  <div id="score-container">
+    <h2>當前統計</h2>
+    <table id="score-table">
+      <thead><tr id="score-header"></tr></thead>
+      <tbody><tr id="score-body"></tr></tbody>
+    </table>
+  </div>
+
+  <div id="end-ui" style="display:none;">
+    <h2>選完卡片，你可以把這副牌組複製成字串</h2>
+    <button id="encode-btn">複製到剪貼簿</button>
+    <div id="encoded"></div>
+  </div>
+
+  <script>
+  // 卡片中文名稱對照
+  const cardNames = {
+    card_1: "金1",
+    card_2: "金2",
+    card_3: "金3",
+    card_4: "金4",
+    card_5: "金5",
+    card_6: "水1",
+    card_7: "水2",
+    card_8: "水3",
+    card_9: "水4",
+    card_10: "水5",
+    card_11: "木1",
+    card_12: "木2",
+    card_13: "木3",
+    card_14: "木4",
+    card_15: "木5",
+    card_16: "火1",
+    card_17: "火2",
+    card_18: "火3",
+    card_19: "火4",
+    card_20: "火5",
+    card_21: "土1",
+    card_22: "土2",
+    card_23: "土3",
+    card_24: "土4",
+    card_25: "土5",
+  };
+
+  // 公牌
+  const cardDefinitions = {
+    card_1: 4, card_2: 4, card_3: 4, card_4: 3, card_5: 3,
+    card_6: 4, card_7: 4, card_8: 4, card_9: 3, card_10: 3,
+    card_11: 4, card_12: 4, card_13: 4, card_14: 3, card_15: 3,
+    card_16: 4, card_17: 4, card_18: 4, card_19: 3, card_20: 3,
+    card_21: 4, card_22: 4, card_23: 4, card_24: 3, card_25: 3
+  };
+
+  let deck = [];
+  let scoreboard = {};
+  let questionNum = 1;
+
+  // 洗牌：Fisher–Yates
+  function shuffle(array) {
+    for (let i = array.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [array[i], array[j]] = [array[j], array[i]];
+    }
+  }
+
+  // 根據 cardDefinitions 建立並洗牌卡池
+  function buildDeck(defs) {
+    const arr = [];
+    for (const [cardId, count] of Object.entries(defs)) {
+      for (let i = 0; i < count; i++) {
+        arr.push(cardId);
+      }
+    }
+    shuffle(arr);
+    return arr;
+  }
+
+  // 初始化 scoreboard
+  function initializeScoreboard(defs) {
+    const sb = {};
+    for (const cardId of Object.keys(defs)) {
+      sb[cardId] = 0;
+    }
+    return sb;
+  }
+
+  // 顯示當前手牌（3 張按鈕）
+  function renderHand(hand) {
+    const container = document.getElementById('card-container');
+    container.innerHTML = '';
+    hand.forEach((cardId, idx) => {
+      const btn = document.createElement('button');
+      btn.textContent = cardNames[cardId];
+      btn.onclick = () => onDiscard(idx, hand);
+      container.appendChild(btn);
+    });
+  }
+
+  // 更新 score table UI
+  function updateScoreUI() {
+    const header = document.getElementById('score-header');
+    const body = document.getElementById('score-body');
+    header.innerHTML = '';
+    body.innerHTML = '';
+    for (const cardId of Object.keys(scoreboard)) {
+      const th = document.createElement('th');
+      th.textContent = cardNames[cardId];
+      header.appendChild(th);
+      const td = document.createElement('td');
+      td.textContent = scoreboard[cardId];
+      body.appendChild(td);
+    }
+  }
+
+  // 玩家捨棄一張，統計剩餘兩張
+  function onDiscard(discardIdx, hand) {
+    hand.forEach((cardId, idx) => {
+      if (idx !== discardIdx) {
+        scoreboard[cardId]++;
+      }
+    });
+    updateScoreUI();
+    questionNum++;
+    if (questionNum <= 30) {
+      document.getElementById('q-num').textContent = questionNum;
+      nextQuestion();
+    } else {
+      // 顯示結束 UI
+      document.getElementById('hand-ui').style.display = 'none';
+      document.getElementById('end-ui').style.display = 'block';
+    }
+  }
+
+  // 進入下一題
+  function nextQuestion() {
+    const hand = deck.splice(0, 3);
+    renderHand(hand);
+  }
+
+  // 編碼結果生成
+  function generateCode() {
+    let code = '';
+    for (let i = 1; i <= 25; i++) {
+      const key = 'card_' + i;
+      code += scoreboard[key];
+    }
+    return code;
+  }
+
+  // 綁定按鈕事件
+  document.addEventListener('DOMContentLoaded', () => {
+    deck = buildDeck(cardDefinitions);
+    scoreboard = initializeScoreboard(cardDefinitions);
+    updateScoreUI();
+    nextQuestion();
+
+    document.getElementById('encode-btn').addEventListener('click', () => {
+      const result = generateCode();
+      document.getElementById('encoded').textContent = result;
+      navigator.clipboard.writeText(result)
+        .then(() => { alert('編碼結果已複製到剪貼簿'); })
+        .catch(err => { console.error('複製失敗', err); });
+    });
+  });
+  </script>
+</body>
+</html>
